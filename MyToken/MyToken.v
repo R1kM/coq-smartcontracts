@@ -1,3 +1,4 @@
+Require Import Nat.
 Require Import Coq.FSets.FMapWeakList.
 Require Import String.
 Require Import OrderedTypeEx.
@@ -21,3 +22,22 @@ Definition create_token (initialSupply:nat) (tokenName:string) (decimalUnits:nat
   let startBalance := AddrMap.empty nat in
   let actualBalance := AddrMap.add sender initialSupply startBalance in
   mytoken tokenName tokenSymbol decimalUnits startBalance (AddrMap.empty MapAddrIntType) (AddrMap.empty MapAddrIntType).
+
+Definition transfer (token:MyToken) (toAddress:nat) (value:nat) :=
+  let obalanceSender := AddrMap.find sender (balanceOf token) in
+  let obalanceReceiver := AddrMap.find toAddress (balanceOf token) in
+  let balanceSender := match obalanceSender with
+    | None =>  0
+    | Some a => a 
+  end in
+  let balanceReceiver := match obalanceReceiver with
+    | None => 0 
+    | Some a => a 
+  end in
+  if (ltb balanceSender value) then token
+  else if (ltb (balanceReceiver + value) balanceReceiver) then token 
+  else
+    let balance := AddrMap.add sender (minus balanceSender value) (balanceOf token) in
+    let balance := AddrMap.add toAddress (plus balanceReceiver value) balance in
+  mytoken (name token) (symbol token) (decimals token) balance (allowance token) (spentAllowance token)
+  .
