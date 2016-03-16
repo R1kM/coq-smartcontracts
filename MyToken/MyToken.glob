@@ -1,0 +1,11 @@
+DIGEST 3c0b2063134693d70edff36593540ec5
+FTop.MyToken
+R15:20 Coq.Strings.String <> <> lib
+constr 42:48 <> mytoken
+rec 31:37 <> MyToken
+proj 54:57 <> name
+proj 70:75 <> symbol
+proj 88:95 <> decimals
+R60:65 Coq.Strings.String <> string ind
+R78:83 Coq.Strings.String <> string ind
+R98:100 Coq.Init.Datatypes <> nat ind
