@@ -10,6 +10,8 @@ contract MyToken {
     mapping (address => mapping (address => uint)) public allowance;
     mapping (address => mapping (address => uint)) public spentAllowance;
 
+    @preservation(balanceOf, fun(key, value) = value)
+
     /* This generates a public event on the blockchain that will notify clients */
     event Transfer(address indexed from, address indexed to, uint256 value);
 
@@ -28,14 +30,6 @@ contract MyToken {
         balanceOf[msg.sender] -= _value;                     // Subtract from the sender
         balanceOf[_to] += _value;                            // Add the same to the recipient            
         Transfer(msg.sender, _to, _value);                   // Notify anyone listening that this transfer took place
-    }
-
-    /* Allow another contract to spend some tokens in your behalf */
-
-    function approveAndCall(address _spender, uint256 _value, bytes _extraData) returns (bool success) {
-        allowance[msg.sender][_spender] = _value;     
-        tokenRecipient spender = tokenRecipient(_spender);
-        spender.receiveApproval(msg.sender, _value, this, _extraData);  
     }
 
     /* A contract attempts to get the coins */

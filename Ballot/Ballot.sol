@@ -31,8 +31,6 @@ contract Ballot {
         voteCounts[proposal] += voterWeight[sender];
     }
 
-    @preservation(voterWeight, snd(x))
-
     address chairperson;
     uint8 numProposals;
     mapping(address => uint256) voterWeight;

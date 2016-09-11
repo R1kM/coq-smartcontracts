@@ -97,7 +97,10 @@ and generate_expression (e : Tast.expression) name = match e with
         | OpOr -> "( orb " ^ (generate_expression e1 name) ^ " " ^ (generate_expression e2 name) ^ ")"
         )        
     | EFunCall (id, el) -> if (List.mem id (!fun_names)) then "let new_gas := (Nat.pred new_gas) in\n (" ^ id ^ " new_gas (create_"^name ^ (print_state_vars (List.tl(List.rev((!state_list))))) ^ ") new_ether msg" ^ (generate_expression_list name el) ^ ")" else ""
-    | EFieldFunCall (e, id, el) -> raise (Error "FieldFunCall expression not supported yet")
+    | EFieldFunCall (e, id, el) -> if (e = EFieldVar(EVar("msg"), "sender") && id = "send") then (
+        "let (_, new_ether) := send (sender msg) " ^ (generate_expression_list name el) ^ " new_ether in\n" 
+        ) 
+        else raise (Error "FieldFunCall expression not supported yet")
 
 (* Helper to generate expressions when an Option structure is involved *)
 let generate_expression_opt ( eo : Tast.expression option) name =

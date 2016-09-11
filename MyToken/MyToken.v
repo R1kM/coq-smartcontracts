@@ -1,230 +1,475 @@
 Require Import List.
+Require Import OrderedType.
+Require Import Coq.Program.Equality.
+Require Import String.
 Require Import Arith.
 Require Import Nat.
-Require Import Coq.FSets.FMapList.
-Require Import String.
 Require Import OrderedTypeEx.
-Require Import Coq.Program.Equality.
-Require Import PeanoNat.
+Require Import Coq.FSets.FMapList.
+Require Import BinInt.
+Require Import BinIntDef.
+Open Scope string_scope.
+Open Scope Z_scope.
+Include BinIntDef.Z.
+Module IntMap := FMapList.Make(Z_as_OT).
+Definition contract_addr := 0.
+Definition EtherMap := IntMap.t Z.
 
-Module AddrMap := FMapList.Make(Nat_as_OT).
-Definition MapAddrIntType := AddrMap.t nat.
+Definition get_ether (addr : Z) map : Z :=
+    match (IntMap.find addr map) with
+    | None => 0
+    | Some a => a
+    end.
 
-Definition sender := 0.
+Definition send addr value map :=
+    if (Z.leb value (get_ether contract_addr map)) then
+        (let map_bis := IntMap.add contract_addr ((get_ether contract_addr map) - value) map in
+        let map_bis := IntMap.add addr ((get_ether addr map_bis) + value) map_bis in
+        (true, map_bis))
+    else (false, map).
 
-Record MyToken := mytoken {
-  name: string;
-  symbol: string;
-  decimals: nat;
-
-  balanceOf: AddrMap.t nat;
-  allowance: AddrMap.t MapAddrIntType;
-  spentAllowance: AddrMap.t MapAddrIntType;
+Record Message := create_message {
+sender : Z;
+value : Z;
 }.
+Record MyToken := create_MyToken { 
+spentAllowance: IntMap.t (IntMap.t (Z));
+allowance: IntMap.t (IntMap.t (Z));
+balanceOf: IntMap.t (Z);
+decimals: Z;
+symbol: string;
+name: string;
+}.
+Definition get_spentAllowance (mapping : IntMap.t (IntMap.t (Z)) ) (a0 : Z) (a1 : Z) := 
+let m1:= match (IntMap.find a0 mapping)  with
+ | None => None 
+ | Some a => IntMap.find a0 a end in 
+let m2:= match m1 with
+ | None => 0
+ | Some a => a end in 
+m2.
+Definition get_allowance (mapping : IntMap.t (IntMap.t (Z)) ) (a0 : Z) (a1 : Z) := 
+let m1:= match (IntMap.find a0 mapping)  with
+ | None => None 
+ | Some a => IntMap.find a0 a end in 
+let m2:= match m1 with
+ | None => 0
+ | Some a => a end in 
+m2.
+Definition get_balanceOf (mapping : IntMap.t (Z) ) (a0 : Z) := 
+let m1:= match (IntMap.find a0 mapping)  with
+ | None => 0
+ | Some a => a end in 
+m1.
+Fixpoint MyToken_constructor(ether : EtherMap) (msg : Message)(initialSupply:Z) (tokenName:string) (decimalUnits:Z) (tokenSymbol:string)  := 
+let spentAllowance := IntMap.empty (IntMap.t (Z)) in
+let allowance := IntMap.empty (IntMap.t (Z)) in
+let balanceOf := IntMap.empty (Z) in
+let decimals := 0 in
+let symbol := "" in
+let name := "" in
+let new_ether := ether in
+let imap1 := match (IntMap.find (sender msg) balanceOf) with
+ |None => 0
+ | Some a => a end in
+let balanceOf := IntMap.add (sender msg) (initialSupply)balanceOf in
+let name := tokenName in 
+let symbol := tokenSymbol in 
+let decimals := decimalUnits in 
+((create_MyToken spentAllowance allowance balanceOf decimals symbol name), new_ether).
+Fixpoint transfer gas (MyToken:MyToken) (ether : EtherMap) (msg : Message)(_to:Z) (_value:Z)  := 
+let spentAllowance := (spentAllowance MyToken) in
+let allowance := (allowance MyToken) in
+let balanceOf := (balanceOf MyToken) in
+let decimals := (decimals MyToken) in
+let symbol := (symbol MyToken) in
+let name := (name MyToken) in
+let new_ether := ether in 
+match gas with
+    | O => ((create_MyToken spentAllowance allowance balanceOf decimals symbol name), new_ether)
+ | S g => let new_gas := g in
+if (( ltb (get_balanceOf balanceOf  ((sender msg))) _value)) then ((MyToken, ether)) 
+ else if (( ltb ((get_balanceOf balanceOf  (_to)) + _value) (get_balanceOf balanceOf  (_to)))) then ((MyToken, ether)) 
+ else let imap1 := match (IntMap.find (sender msg) balanceOf) with
+ |None => 0
+ | Some a => a end in
+let balanceOf := IntMap.add (sender msg) (((get_balanceOf balanceOf  ((sender msg))) - _value))balanceOf in
+let imap1 := match (IntMap.find _to balanceOf) with
+ |None => 0
+ | Some a => a end in
+let balanceOf := IntMap.add _to (((get_balanceOf balanceOf  (_to)) + _value))balanceOf in
+((create_MyToken spentAllowance allowance balanceOf decimals symbol name), new_ether)end.
+Fixpoint transferFrom gas (MyToken:MyToken) (ether : EtherMap) (msg : Message)(_from:Z) (_to:Z) (_value:Z)  := 
+let spentAllowance := (spentAllowance MyToken) in
+let allowance := (allowance MyToken) in
+let balanceOf := (balanceOf MyToken) in
+let decimals := (decimals MyToken) in
+let symbol := (symbol MyToken) in
+let name := (name MyToken) in
+let success := false in 
+let new_ether := ether in 
+match gas with
+    | O => ((create_MyToken spentAllowance allowance balanceOf decimals symbol name), new_ether, success)
 
-Definition create_token (initialSupply:nat) (tokenName:string) (decimalUnits:nat) (tokenSymbol:string) :=
-  let startBalance := AddrMap.empty nat in
-  let actualBalance := AddrMap.add sender initialSupply startBalance in
-  mytoken tokenName tokenSymbol decimalUnits actualBalance (AddrMap.empty MapAddrIntType) (AddrMap.empty MapAddrIntType).
-
-Definition get_balance (token : MyToken) (address : nat) :=
-  match AddrMap.find address (balanceOf token) with
-    |None => 0
-    |Some a => a
-  end.
-
-Definition transfer (token:MyToken) (toAddress:nat) (value:nat) :=
-  let balanceSender := get_balance token sender in
-  let balanceReceiver := get_balance token toAddress in
-  if (ltb balanceSender value) then token
-  else if (ltb (balanceReceiver + value) balanceReceiver) then token 
-  else
-    let balance := AddrMap.add sender (minus balanceSender value) (balanceOf token) in
-    let balance := AddrMap.add toAddress (plus balanceReceiver value) balance in
-  mytoken (name token) (symbol token) (decimals token) balance (allowance token) (spentAllowance token)
-  .
-
-Definition transferFrom (token:MyToken) (fromAddress:nat) (toAddress:nat) (value:nat) := 
-  let obalanceSender := AddrMap.find fromAddress (balanceOf token) in
-  let obalanceReceiver := AddrMap.find toAddress (balanceOf token) in
-  let balanceSender := match obalanceSender with
-    | None => 0
-    | Some a => a
-  end in
-  let balanceReceiver := match obalanceReceiver with
-    | None => 0
-    | Some a => a
-  end in
-  if (ltb balanceSender value) then (token, false)
-  else if (ltb (balanceReceiver + value) balanceReceiver) then (token, false)
-  else 
-  let ospentAllowance := match (AddrMap.find fromAddress (spentAllowance token)) with
-    | None => None
-    | Some a => AddrMap.find sender a
-  end in
-  let currSpentAllowance := match ospentAllowance with
-    | None => 0
-    | Some a => a
-  end in 
-  let oallowance := match (AddrMap.find fromAddress (allowance token)) with
-    | None => None
-    | Some a => AddrMap.find sender a
-  end in
-  let currAllowance := match oallowance with
-    | None => 0
-    | Some a => a
-  end in 
-  if (ltb (currSpentAllowance + value) currAllowance) then (token, false)
-  else 
-    let balance := AddrMap.add fromAddress (minus balanceSender value) (balanceOf token) in
-    let balance := AddrMap.add toAddress (plus balanceReceiver value) balance in
-    let auxSpentAllowance := match (AddrMap.find fromAddress (spentAllowance token)) with
-      | None => AddrMap.empty nat
-      | Some a => a
-    end in
-    let newSpentAllowance := AddrMap.add fromAddress (AddrMap.add sender (currSpentAllowance + value) auxSpentAllowance) (spentAllowance token) in
-    (mytoken (name token) (symbol token) (decimals token) balance (allowance token) newSpentAllowance, true)
-.
-
-Fixpoint sum_onBalance (balance_list : list (nat * nat)) :=
-  match balance_list with
-    | nil => 0
-    | a::q => (snd a) +(sum_onBalance q)
-  end.
-
-Definition totalBalance (token : MyToken) :=
-  sum_onBalance (AddrMap.elements (balanceOf token))
-.
-
-Lemma correct_creation : forall (initial dec : nat ) (name symbol: string), 
-  totalBalance (create_token initial name dec symbol) = initial.
+ | S g => let new_gas := g in
+if (( ltb (get_balanceOf balanceOf  (_from)) _value)) then ((MyToken, ether, success)
+) 
+ else if (( ltb ((get_balanceOf balanceOf  (_to)) + _value) (get_balanceOf balanceOf  (_to)))) then ((MyToken, ether, success)
+) 
+ else if (( leb (get_allowance allowance  (_from) ((sender msg))) ((get_spentAllowance spentAllowance  (_from) ((sender msg))) + _value))) then ((MyToken, ether, success)
+) 
+ else let imap1 := match (IntMap.find _from balanceOf) with
+ |None => 0
+ | Some a => a end in
+let balanceOf := IntMap.add _from (((get_balanceOf balanceOf  (_from)) - _value))balanceOf in
+let imap1 := match (IntMap.find _to balanceOf) with
+ |None => 0
+ | Some a => a end in
+let balanceOf := IntMap.add _to (((get_balanceOf balanceOf  (_to)) + _value))balanceOf in
+let imap1 := match (IntMap.find _from spentAllowance) with
+ |None => IntMap.empty (Z)
+ | Some a => a end in
+let imap2 := match (IntMap.find (sender msg) imap1) with
+ |None => 0
+ | Some a => a end in
+let spentAllowance := IntMap.add _from (IntMap.add (sender msg) (((get_spentAllowance spentAllowance  (_from) ((sender msg))) + _value))imap1)spentAllowance in
+((create_MyToken spentAllowance allowance balanceOf decimals symbol name), new_ether, success)
+end.
+Definition anonymous_function (MyToken : MyToken) (ether : EtherMap) (msg : Message) :=
+let new_ether := ether in 
+(MyToken, ether).
+Lemma plus_reg_r : forall (n m p : Z), n = m -> p+n= p+m.
 Proof.
   intros.
-  unfold totalBalance.
-  unfold balanceOf.
-  simpl.
-  symmetry.
-  apply plus_n_O.
-Qed.
-
-Lemma plus_reg_r : forall (n m p : nat), n = m -> p+n= p+m.
-Proof.
-  intros.
+  induction p.
   auto.
+  rewrite -> H.
+  auto.
+rewrite -> H.
+auto.
 Qed.
 
-Lemma extract_Sorted : forall (a b : nat*nat) (l : list (nat * nat)),
-  Sorted.Sorted (AddrMap.Raw.PX.ltk (elt:=nat)) (a::b::l) -> Sorted.Sorted (AddrMap.Raw.PX.ltk (elt:=nat)) (b::l).
+Lemma plus_reg_r2 : forall (n m p : Z), n = m -> n+p= m+p.
+Proof.
+  intros.
+  destruct p.
+  rewrite -> H.
+  reflexivity.
+rewrite -> H.
+  reflexivity.
+rewrite -> H.
+  reflexivity.
+Qed.
+
+Lemma plus_reg_l2 : forall (n m p : Z), n+p= m+p -> n = m.
+Proof.
+  intros.
+rewrite <- Z.add_cancel_l with (n := n) (m := m) (p := p).
+rewrite -> Z.add_comm.
+symmetry.
+rewrite -> Z.add_comm.
+symmetry.
+apply H.
+Qed.
+
+Lemma add_0_n : forall (n : Z), n + 0 = n.
+Proof.
+intro.
+now destruct n.
+Qed.
+
+Lemma Zminus_assoc_reverse : forall (n m p : Z), n + m - p = n + (m - p).
+Proof.
+intros.
+assert (m-p = m + -p).
+apply Zplus_minus_eq.
+symmetry.
+apply Zplus_minus.
+rewrite -> H.
+symmetry.
+apply Zplus_minus_eq.
+rewrite -> Zplus_assoc.
+symmetry.
+rewrite -> Z.add_comm.
+rewrite -> Zplus_assoc.
+rewrite -> Z.add_comm.
+apply plus_reg_r.
+rewrite <- Zplus_assoc.
+assert (-p + p = 0).
+destruct p.
+simpl.
+auto.
+simpl.
+apply Z.pos_sub_diag.
+simpl.
+apply Z.pos_sub_diag.
+rewrite -> H0.
+symmetry.
+apply Zplus_0_r_reverse.
+Qed.
+
+
+Lemma extract_Sorted_0 : forall (a b : Z*Z) (l : list (Z * Z)),
+  Sorted.Sorted (IntMap.Raw.PX.ltk (elt:=Z)) (a::b::l) -> Sorted.Sorted (IntMap.Raw.PX.ltk (elt:=Z)) (b::l).
 Proof.
   intros.
   apply Sorted.Sorted_inv in H.
   apply H.
-Qed.
+Qed. 
 
-Lemma update_balance : forall (token : MyToken) (address value : nat),
-  let balance_map := (balanceOf token) in
-  let balance2 := sum_onBalance (AddrMap.elements (AddrMap.add address value balance_map)) in
-  (sum_onBalance (AddrMap.elements balance_map)) + value = balance2 + (get_balance token address).
-Proof.
-  intros.
-  unfold balance2.
-  unfold sum_onBalance.
-  simpl.
-  intros.
-  unfold get_balance.
-  unfold AddrMap.find.
-  replace (balanceOf token) with balance_map.
-  destruct balance_map.
-  simpl.
-  unfold AddrMap.Raw.add.
-  remember (hd this) as a.
-  remember (tl this) as a_bis.
-  dependent induction this.
--  unfold snd.
-   simpl.
-   elim value.
-  simpl.
-  reflexivity.
-  intros.
-  simpl in |- *.
-  rewrite <- H.
-  reflexivity.
--  simpl.
-  destruct a.
-  unfold fst.
-  destruct (Nat_as_OT.compare).
-  +simpl.
-  rewrite <- plus_n_O.
-  rewrite -> Nat.add_comm.
-  reflexivity.
-  + simpl.
-  rewrite -> Nat.add_comm.
-  symmetry.
-  rewrite -> plus_assoc_reverse.
-  symmetry.
-  apply plus_reg_r with (p := value) (n := n0 +
- (fix sum_onBalance (balance_list : list (nat * nat)) : nat :=
-    match balance_list with
+Definition mapping_function_balanceOf ( x : Z * Z) := 
+ let new_gas := (Nat.pred new_gas) in
+ (snd new_gas (create_MyToken spentAllowance allowance balanceOf decimals symbol name) new_ether msg (x)).
+Fixpoint sum_balanceOf (maplist : list (Z * Z)) := 
+ match maplist with
     | nil => 0
-    | a :: q => snd a + sum_onBalance q
-    end) this) (m := (fix sum_onBalance (balance_list : list (nat * nat)) : nat :=
-   match balance_list with
-   | nil => 0
-   | a :: q => snd a + sum_onBalance q
-   end) this + n0).
-  rewrite -> Nat.add_comm.
-  reflexivity.
-  +simpl.
-   rewrite -> plus_assoc_reverse.
-   symmetry.
-   rewrite -> plus_assoc_reverse.
-   apply plus_reg_r with (p := n0) (m := ((fix sum_onBalance (balance_list : list (nat * nat)) : nat :=
-    match balance_list with
-    | nil => 0
-    | a :: q => snd a + sum_onBalance q
-    end) this + value))
- (n := ((fix sum_onBalance (balance_list : list (nat * nat)) : nat :=
-    match balance_list with
-    | nil => 0
-    | a :: q => snd a + sum_onBalance q
-    end)
-   ((fix add (k : AddrMap.Raw.key) (x : nat) (s : AddrMap.Raw.t nat) {struct s} :
-       AddrMap.Raw.t nat :=
-       match s with
-       | nil => (k, x) :: nil
-       | (k', y) :: l0 =>
-           match Nat_as_OT.compare k k' with
-           | OrderedType.LT _ => (k, x) :: s
-           | OrderedType.EQ _ => (k, x) :: l0
-           | OrderedType.GT _ => (k', y) :: add k x l0
-           end
-       end) address value this) +
- match AddrMap.Raw.find (elt:=nat) address this with
- | Some a => a
- | None => 0
- end)).
-  induction this.
-  simpl.
-  rewrite <- Nat.add_comm.
-  simpl.
-  rewrite <- Nat.add_comm.
-  simpl.
-  reflexivity.
-  symmetry.
-  apply IHthis with (a0:=hd (a::this)) (a_bis := this).
-  * apply extract_Sorted with (a := (n,n0)).
-    apply sorted.
-  * reflexivity.
-  * reflexivity.
-  - unfold balance_map.
-    reflexivity.
-Qed.
+    | a::q => (mapping_function_balanceOf a) + (sum_balanceOf q)
+end.
+Lemma update_balanceOf : forall ( MyToken2 : MyToken ) (address : Z) (value : Z),
+      let balance_map := (balanceOf MyToken2) in
+      let original_value := match (IntMap.find address (balanceOf MyToken2)) with
+      | None => 0
+      | Some a => mapping_function_balanceOf(address, a) end in
+      let balance2 := sum_balanceOf (IntMap.elements (IntMap.add address value balance_map)) in
+      (sum_balanceOf (IntMap.elements balance_map)) + mapping_function_balanceOf(address, value) = balance2 + original_value.
+      Proof.
+      Opaque mapping_function_balanceOf.
+      intros.
+      case_eq (IntMap.find (elt := Z) address (balanceOf MyToken2)).
+      intro t0.
+      unfold balance2.
+      unfold sum_balanceOf.
+      simpl.
+      unfold get_balanceOf.
+      unfold balance_map.
+      destruct (balanceOf MyToken2).
+      intros.
+      simpl.
+      unfold IntMap.Raw.add.
+      remember (hd this) as a.
+      remember (tl this) as a_bis.
+      dependent induction this.
+      - assert (original_value = 0).
+      simpl in original_value.
+      auto.
+      rewrite -> H0.
+      simpl.
+      symmetry.
+      rewrite -> Z.add_comm.
+      simpl.
+      rewrite -> Z.add_comm.
+      simpl.
+      reflexivity.
+      - simpl.
+      destruct a as (z0, z1).
+      destruct (Z_as_OT.compare).
+      + simpl.
+      assert (IntMap.find (elt := Z) address {| IntMap.this := (z0, z1) :: this; IntMap.sorted := sorted |} = None).
+      unfold IntMap.find.
+      unfold IntMap.Raw.find.
+      simpl.
+      destruct Z_as_OT.compare.
+      reflexivity.
+      unfold Z_as_OT.lt in l.
+      unfold Z_as_OT.eq in e.
+      apply Z_as_OT.lt_not_eq in e.
+      contradiction.
+      apply l.
+      apply Z_as_OT.lt_trans with (x:=z0) (y:=address) (z:=z0) in l0.
+      apply Z_as_OT.lt_not_eq in l0.
+      compute in l0.
+      absurd (z0 = z0).
+      auto.
+      reflexivity.
+      apply l.
+      rewrite -> H0 in H.
+      discriminate.
+      + rewrite <- Z.add_comm.
+      symmetry.
+      rewrite <- Z.add_assoc.
+      apply plus_reg_r.
+      rewrite -> Z.add_comm.
+      assert (original_value = mapping_function_balanceOf (z0, z1)).
+      unfold original_value.
+      rewrite -> e.
+      unfold IntMap.find.
+      unfold IntMap.Raw.find.
+      simpl.
+      destruct Z_as_OT.compare.
+      apply Z_as_OT.lt_not_eq in l.
+      absurd (z0 <> z0).
+      auto.
+      apply l.
+      rewrite -> e.
+      reflexivity.
+      apply Z_as_OT.lt_not_eq in l.
+      absurd (z0 <> z0).
+      auto.
+      apply l.
+      rewrite -> H0.
+      reflexivity.
+      + rewrite <- Z.add_assoc.
+      symmetry.
+      rewrite <- Z.add_assoc.
+      apply plus_reg_r.
+      symmetry.
+      assert (Sorted (IntMap.Raw.PX.ltk (elt := Z)) this).
+      induction this.
+      auto.
+      apply extract_Sorted_0 with (a:=(z0, z1)).
+      apply sorted.
+      assert (original_value = match
+        IntMap.find (elt := Z) address {| IntMap.this := this; IntMap.sorted := H0 |} with
+        | Some a => mapping_function_balanceOf (address, a)
+        | None => 0
+        end).
+      unfold original_value.
+      unfold IntMap.find.
+      unfold IntMap.Raw.find.
+      simpl.
+      destruct Z_as_OT.compare.
+      apply Z_as_OT.lt_trans with (x:=address) (y:=z0) (z:=address) in l0.
+      absurd (address < address).
+      auto.
+      apply l0.
+      apply l.
+      rewrite -> e in l.
+      apply Z_as_OT.lt_not_eq in l.
+      absurd (z0 <> z0).
+      auto.
+      apply l.
+      reflexivity.
+      rewrite -> H1.
+      apply IHthis with (sorted := H0) (a := hd this) (a_bis := tl this) (t0:=t0).
+      unfold IntMap.find.
+      unfold IntMap.Raw.find.
+      simpl.
+      unfold IntMap.find in H.
+      unfold IntMap.Raw.find in H.
+      simpl in H.
+      destruct Z_as_OT.compare in H.
+      apply Z_as_OT.lt_trans with (x:=address) (y:=z0) (z:=address) in l0.
+      absurd (address < address).
+      auto.
+      apply l0.
+      apply l.
+      rewrite -> e in l.
+      apply Z_as_OT.lt_not_eq in l.
+      absurd (z0 <> z0).
+      auto.
+      apply l.
+      apply H.
+      reflexivity.
+      reflexivity.
+      - intros.
+      assert (original_value = 0).
+      unfold original_value.
+      rewrite -> H.
+      reflexivity.
+      rewrite -> H0.
+      unfold balance2.
+      unfold balance_map.
+      destruct (balanceOf MyToken2).
+      simpl.
+      dependent induction this.
+      simpl.
+      symmetry.
+      rewrite -> Z.add_comm.
+      simpl.
+      rewrite -> Z.add_comm.
+      simpl.
+      reflexivity.
+      unfold IntMap.Raw.add.
+      destruct a as (z, t0).
+      destruct Z_as_OT.compare.
+      unfold sum_balanceOf.
+      rewrite -> Z.add_comm.
+      symmetry.
+      rewrite <- Z.add_assoc.
+      apply plus_reg_r.
+      rewrite -> Z.add_comm.
+      simpl.
+      reflexivity.
+      simpl.
+      assert (original_value = mapping_function_balanceOf (z, t0)).
+      unfold original_value.
+      unfold IntMap.find.
+      unfold IntMap.Raw.find.
+      simpl.
+      destruct Z_as_OT.compare.
+      apply Z_as_OT.lt_not_eq in l.
+      rewrite -> e in l.
+      absurd (z <> z).
+      auto.
+      apply l.
+      rewrite -> e.
+      reflexivity.
+      rewrite -> e in l.
+      apply Z_as_OT.lt_not_eq in l.
+      absurd (z <> z).
+      auto.
+      apply l.
+      rewrite -> H0 in H1.
+      rewrite <- H1.
+      simpl.
+      symmetry.
+      rewrite <- Z.add_comm.
+      simpl.
+      rewrite <- Z.add_comm.
+      reflexivity.
+      unfold IntMap.Raw.add in IHthis.
+      unfold sum_balanceOf.
+      rewrite <- Z.add_assoc.
+      symmetry.
+      rewrite <- Z.add_assoc.
+      symmetry.
+      apply plus_reg_r.
+      unfold sum_balanceOf in IHthis.
+      assert (Sorted (IntMap.Raw.PX.ltk (elt := Z)) this).
+      induction this.
+      auto.
+      apply extract_Sorted_0 with (a:= (z, t0)).
+      apply sorted.
+      apply IHthis with (sorted := H1).
+      unfold IntMap.find.
+      unfold IntMap.Raw.find.
+      simpl.
+      unfold IntMap.find in H.
+      unfold IntMap.Raw.find in H.
+      simpl in H.
+      destruct Z_as_OT.compare in H.
+      apply Z_as_OT.lt_trans with (x:=z) (y:=address) (z:=z) in l.
+      absurd (z<z).
+      auto.
+      apply l.
+      apply l0.
+      discriminate.
+      apply H.
+      assert (IntMap.find (elt := Z) address {| IntMap.this := this; IntMap.sorted := H1 |} = None).
+      unfold IntMap.find.
+      unfold IntMap.Raw.find.
+      simpl.
+      unfold IntMap.find in H.
+      unfold IntMap.Raw.find in H.
+      simpl in H.
+      destruct Z_as_OT.compare in H.
+      apply Z_as_OT.lt_trans with (x:=z) (y:=address) (z:=z) in l.
+      absurd (z<z).
+      auto.
+      apply l.
+      apply l0.
+      discriminate.
+      apply H.
+      rewrite -> H2.
+      reflexivity.
+      Qed.
+Theorem preservation_transferFrom_balanceOf : forall (MyToken : MyToken) (ether : EtherMap) (msg : Message)(_from:Z) (_to:Z) (_value:Z) , 
+ let MyToken_2 :=  fst( transferFrom MyToken ether msg _from _to _value) in
+ (sum_balanceOf (IntMap.elements (balanceOf MyToken))) = ( sum_balanceOf (IntMap.elements (balanceOf MyToken_2))).
+Admitted.
 
-Lemma transfer_preservation : forall (token :MyToken) (toAddress value : nat), 
-  let token2 := transfer token toAddress value in 
-  totalBalance token = totalBalance token2.
-Proof.
-  intros.
-  unfold totalBalance.
-  unfold token2.
-  unfold transfer.
+Theorem preservation_transfer_balanceOf : forall (MyToken : MyToken) (ether : EtherMap) (msg : Message)(_to:Z) (_value:Z) , 
+ let MyToken_2 :=  fst( transfer MyToken ether msg _to _value) in
+ (sum_balanceOf (IntMap.elements (balanceOf MyToken))) = ( sum_balanceOf (IntMap.elements (balanceOf MyToken_2))).
+Admitted.
+
